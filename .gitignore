@@ -1,0 +1,40 @@
+# R
+.Rhistory
+.Rdata
+.RData
+.Ruserdata
+.httr-oauth
+*.Rproj.user/
+
+# Stan compiled artifacts
+*.hpp
+*.o
+*.d
+*.exe
+stan/*[!.stan]
+
+# knitr / R Markdown
+*_cache/
+*_files/
+*.knit.md
+*.utf8.md
+
+# Data (large files)
+data/raw/*.csv
+data/raw/*.zip
+data/processed/*.csv
+data/processed/*.rds
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.Renviron
