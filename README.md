@@ -56,6 +56,8 @@ $h(i), a(i) \in \{1,\dots,T\}$: home and away teams in match $i$
 
 $e(i) \in \{1,\dots,E\}$: era of match $i$
 
+------------------------------------------------------------------------
+
 #### Parameters
 
 $\mu$: baseline log scoring rate
@@ -70,9 +72,99 @@ $\sigma_{\alpha,e}$: dispersion of attacking strengths in era $e$
 
 $\sigma_{\beta,e}$: dispersion of defensive strengths in era $e$
 
-#### Model
+## Model
 
-Assumes constant team strength; matches depend only on relative strength.
+### Likelihood
+
+$$
+y_i^{(H)} \sim \text{Poisson}(\lambda_i^{(H)})
+$$
+
+$$
+y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
+$$
+
+$$
+\log \lambda_i^{(H)} = \mu + \delta + \alpha_{h(i)} - \beta_{a(i)}
+$$
+
+$$
+\log \lambda_i^{(A)} = \mu + \alpha_{a(i)} - \beta_{h(i)}
+$$
+
+------------------------------------------------------------------------
+
+### Priors
+
+**Team-level hierarchy**
+
+$$
+\alpha_t \sim \mathcal{N}(0, \sigma_{\alpha,e(t)}^2)
+$$
+
+$$
+\beta_t \sim \mathcal{N}(0, \sigma_{\beta,e(t)}^2)
+$$
+
+**Era-level dispersion parameters**
+
+$$
+\sigma_{\alpha,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,E
+$$
+
+$$
+\sigma_{\beta,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,E
+$$
+
+**Global parameters**
+
+$$
+\mu \sim \mathcal{N}(0,1)
+$$
+
+$$
+\delta \sim \mathcal{N}(0,0.5^2)
+$$
+
+------------------------------------------------------------------------
+
+### Identifiability Constraints (optional)
+
+$$
+\sum_{t=1}^{T} \alpha_t = 0
+$$
+
+$$
+\sum_{t=1}^{T} \beta_t = 0
+$$
+
+------------------------------------------------------------------------
+
+## Posterior
+
+We infer the joint posterior:
+
+$$
+p\left(
+\mu, \delta,
+\{\alpha_t, \beta_t\}_{t=1}^{T},
+\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
+\mid
+\{y_i^{(H)}, y_i^{(A)}\}_{i=1}^{N}
+\right)
+$$
+
+------------------------------------------------------------------------
+
+## Quantity of Interest
+
+The key object of interest is the evolution of
+
+$$
+\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
+$$
+
+which measures how the **dispersion of team strengths changes across eras**, and therefore captures changes in **competitive balance (parity)** over time.
 
 ### Model 2: Hierarchical Bayesian Goal Model
 
@@ -104,10 +196,10 @@ Monte Carlo simulations (e.g., 10,000 runs) to estimate: - Probability each team
 
 ## Team Contribution Plan
 
-| Member    | Responsibilities                                                      |
-|-------------------------|----------------------------------------------|
-| Student 1 | Data collection & preprocessing, baseline model implementation        |
-| Student 2 | Hierarchical Bayesian model, Stan model development                   |
+| Member | Responsibilities |
+|--------------------------|----------------------------------------------|
+| Student 1 | Data collection & preprocessing, baseline model implementation |
+| Student 2 | Hierarchical Bayesian model, Stan model development |
 | Student 3 | Posterior inference methods, model comparison & tournament simulation |
 
 All members contribute to report writing, visualization, and interpretation.
