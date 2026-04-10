@@ -42,7 +42,7 @@ We will: 1. Model how team strength distributions have evolved across historical
 
 ## Methodology
 
-### Model 1: Baseline Bayesian Bradley-Terry Model
+### Model 1: Shrinking Strength Spread (Poisson Goals)
 
 #### Observed Data
 
