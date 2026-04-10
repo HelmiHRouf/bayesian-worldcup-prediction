@@ -62,8 +62,6 @@ $e(i) \in \{1,\dots,E\}$: era of match $i$
 
 $\mu$: baseline log scoring rate
 
-$\delta$: home advantage
-
 $\alpha_t$: attacking strength of team $t$
 
 $\beta_t$: defensive strength of team $t$
@@ -122,10 +120,6 @@ $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
-$$
-\delta \sim \mathcal{N}(0,0.5^2)
-$$
-
 ------------------------------------------------------------------------
 
 ### Identifiability Constraints (optional)
@@ -146,7 +140,7 @@ We infer the joint posterior:
 
 $$
 p\left(
-\mu, \delta,
+\mu,
 \{\alpha_t, \beta_t\}_{t=1}^{T},
 \{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
 \mid
@@ -196,10 +190,10 @@ Monte Carlo simulations (e.g., 10,000 runs) to estimate: - Probability each team
 
 ## Team Contribution Plan
 
-| Member | Responsibilities |
+| Member    | Responsibilities                                                      |
 |--------------------------|----------------------------------------------|
-| Student 1 | Data collection & preprocessing, baseline model implementation |
-| Student 2 | Hierarchical Bayesian model, Stan model development |
+| Student 1 | Data collection & preprocessing, baseline model implementation        |
+| Student 2 | Hierarchical Bayesian model, Stan model development                   |
 | Student 3 | Posterior inference methods, model comparison & tournament simulation |
 
 All members contribute to report writing, visualization, and interpretation.
