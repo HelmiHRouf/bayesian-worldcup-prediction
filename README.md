@@ -50,7 +50,7 @@ We will:
 Each team has a latent strength parameter θ. Match outcome probability:
 
 ```
-P(Team A wins) = σ(θ_A − θ_B)
+P(Team A wins) = σ(θ_A − θ_B) Check
 ```
 
 - θ_i ∼ N(0, 1)
