@@ -83,7 +83,7 @@ y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
 $$
 
 $$
-\log \lambda_i^{(H)} = \mu + \delta + \alpha_{h(i)} - \beta_{a(i)}
+\log \lambda_i^{(H)} = \mu  + \alpha_{h(i)} - \beta_{a(i)}
 $$
 
 $$
@@ -160,16 +160,134 @@ $$
 
 which measures how the **dispersion of team strengths changes across eras**, and therefore captures changes in **competitive balance (parity)** over time.
 
-### Model 2: Hierarchical Bayesian Goal Model
+## Model 2: Continuous-Time Varying Competitive Balance
 
-Goals modeled using Poisson distributions:
+### Model Setup and Notation
 
-```         
-Goals_home ∼ Poisson(λ_home)
-log(λ_home) = attack_home − defense_away + home_advantage
-```
+Let $i = 1,\dots,N$ index matches, $t = 1,\dots,T$ index teams, and $y = 1,\dots,Y$ index years.
 
-Parameters per team: attack strength, defensive strength, plus a shared home advantage parameter. Hierarchical priors are used for team parameters.
+$h(i), a(i)$: home and away teams in match $i$  
+
+$y(i)$: year in which match $i$ is played  
+
+---
+
+### Observed Data
+
+$y_i^{(H)}$: goals scored by the home team in match $i$  
+
+$y_i^{(A)}$: goals scored by the away team in match $i$  
+
+---
+
+### Parameters
+
+*Global parameters*
+
+$\mu$: baseline log scoring rate  
+
+*Team-year latent strengths*
+
+$\alpha_{t,y}$: attacking strength of team $t$ in year $y$  
+
+$\beta_{t,y}$: defensive strength of team $t$ in year $y$  
+
+*Time-varying competitiveness*
+
+$\sigma_y$: dispersion of team strengths in year $y$  
+
+$\omega$: volatility of the evolution of $\sigma_y$  
+
+---
+
+### Likelihood
+
+$$
+y_i^{(H)} \sim \text{Poisson}(\lambda_i^{(H)})
+$$
+
+$$
+y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
+$$
+
+$$
+\log \lambda_i^{(H)} = \mu + \alpha_{h(i),y(i)} - \beta_{a(i),y(i)}
+$$
+
+$$
+\log \lambda_i^{(A)} = \mu + \alpha_{a(i),y(i)} - \beta_{h(i),y(i)}
+$$
+
+---
+
+### Team-Level Structure
+
+$$
+\alpha_{t,y} \sim \mathcal{N}(0, \sigma_y^2)
+$$
+
+$$
+\beta_{t,y} \sim \mathcal{N}(0, \sigma_y^2)
+$$
+
+---
+
+### Evolution of Competitive Balance
+
+We model the evolution of log-dispersion as a random walk:
+
+$$
+\log \sigma_y = \log \sigma_{y-1} + \varepsilon_y
+$$
+
+$$
+\varepsilon_y \sim \mathcal{N}(0, \omega^2)
+$$
+
+---
+
+### Priors
+
+$$
+\sigma_1 \sim \text{HalfNormal}(0,1)
+$$
+
+$$
+\omega \sim \text{HalfNormal}(0,0.5)
+$$
+
+$$
+\mu \sim \mathcal{N}(0,1)
+$$
+
+---
+
+### Posterior
+
+We infer the joint posterior:
+
+$$
+p\left(
+\mu,
+\{\alpha_{t,y}, \beta_{t,y}\},
+\{\sigma_y\},
+\omega
+\mid
+\{y_i^{(H)}, y_i^{(A)}\}
+\right)
+$$
+
+---
+
+### Quantity of Interest
+
+The primary object of interest is the trajectory
+
+$$
+\{\sigma_y\}_{y=1}^{Y}
+$$
+
+which represents the *evolution of competitive balance over time*.
 
 ### Posterior Computation
 
