@@ -14,12 +14,12 @@ Football match outcomes are inherently uncertain and depend on latent team stren
 
 ### Research Question
 
-> What is the probability that each national team will win the 2026 FIFA World Cup given historical match data?
+> Has international football become more unpredictable over time?
 
 We will:
-1. Infer latent team strength parameters from historical match results.
-2. Model match outcomes probabilistically.
-3. Simulate the tournament to estimate posterior winning probabilities.
+1. Model how team strength distributions have evolved across historical eras.
+2. Quantify changes in match outcome randomness using Bayesian hierarchical models.
+3. Compare posterior estimates of competitiveness across decades.
 
 ## Datasets
 
