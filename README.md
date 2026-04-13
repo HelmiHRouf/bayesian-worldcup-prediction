@@ -60,15 +60,17 @@ $e(i) \in \{1,\dots,E\}$: era of match $i$
 
 #### Parameters
 
-$\mu$: baseline log scoring rate
+$\mu$: baseline log scoring rate (global)
 
-$\alpha_t$: attacking strength of team $t$
+$\delta$: home advantage parameter (log scale adjustment)
 
-$\beta_t$: defensive strength of team $t$
+$\sigma_{\alpha,e}$: dispersion (standard deviation) of attacking strengths across all teams in era $e$, for $e = 1,\dots,7$
 
-$\sigma_{\alpha,e}$: dispersion of attacking strengths in era $e$
+$\sigma_{\beta,e}$: dispersion of defensive strengths across all teams in era $e$, for $e = 1,\dots,7$
 
-$\sigma_{\beta,e}$: dispersion of defensive strengths in era $e$
+$a_t$: attacking strength of team $t$ (latent random effect, drawn from $\mathcal{N}(0, \sigma_{\alpha,e(t)}^2)$)
+
+$d_t$: defensive strength of team $t$ (latent random effect, drawn from $\mathcal{N}(0, \sigma_{\beta,e(t)}^2)$)
 
 ## Model
 
@@ -83,58 +85,69 @@ y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
 $$
 
 $$
-\log \lambda_i^{(H)} = \mu  + \alpha_{h(i)} - \beta_{a(i)}
+\log \lambda_i^{(H)} = \mu + \delta + a_{h(i)} - d_{a(i)}
 $$
 
 $$
-\log \lambda_i^{(A)} = \mu + \alpha_{a(i)} - \beta_{h(i)}
+\log \lambda_i^{(A)} = \mu + a_{a(i)} - d_{h(i)}
+$$
+
+where team attacking strengths $a_t$ and defensive strengths $d_t$ are drawn from era-specific distributions:
+
+$$
+a_t \sim \mathcal{N}(0, \sigma_{\alpha,e(t)}^2)
+$$
+
+$$
+d_t \sim \mathcal{N}(0, \sigma_{\beta,e(t)}^2)
 $$
 
 ------------------------------------------------------------------------
 
 ### Priors
 
-**Team-level hierarchy**
+**Era-level dispersion parameters** (main quantity of interest):
 
 $$
-\alpha_t \sim \mathcal{N}(0, \sigma_{\alpha,e(t)}^2)
-$$
-
-$$
-\beta_t \sim \mathcal{N}(0, \sigma_{\beta,e(t)}^2)
-$$
-
-**Era-level dispersion parameters**
-
-$$
-\sigma_{\alpha,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,E
+\sigma_{\alpha,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,7
 $$
 
 $$
-\sigma_{\beta,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,E
+\sigma_{\beta,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,7
 $$
 
-**Global parameters**
+**Global parameters:**
 
 $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
+$$
+\delta \sim \text{HalfNormal}(0,1)
+$$
+
+------------------------------------------------------------------------
+
+### Implementation Note
+
+In the Stan implementation, team-level attacking strengths $a_t$ and defensive strengths $d_t$ are treated as **random effects** (latent variables). Rather than sampling individual team parameters (which would require $2 \times T \times 7$ parameters), we use a **non-centered parameterization with random effects** that marginalizes out the team-level uncertainties during sampling. This yields computationally tractable inference while still estimating the key era-specific dispersion parameters $\sigma_{\alpha,e}$ and $\sigma_{\beta,e}$.
+
 ------------------------------------------------------------------------
 
 ## Posterior
 
-We infer the joint posterior:
+We infer the joint posterior over era-level dispersion parameters:
 
 $$
 p\left(
-\mu,
-\{\alpha_t, \beta_t\}_{t=1}^{T},
-\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
+\mu, \delta,
+\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{7}
 \mid
 \{y_i^{(H)}, y_i^{(A)}\}_{i=1}^{N}
 \right)
 $$
+
+Note: Team-level strengths $\{a_t, d_t\}_{t=1}^{T}$ are treated as random effects and marginalized out during sampling.
 
 ------------------------------------------------------------------------
 
@@ -143,7 +156,7 @@ $$
 The key object of interest is the evolution of
 
 $$
-\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
+$\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{7}
 $$
 
 which measures how the **dispersion of team strengths changes across eras**, and therefore captures changes in **competitive balance (parity)** over time.
@@ -154,39 +167,39 @@ which measures how the **dispersion of team strengths changes across eras**, and
 
 Let $i = 1,\dots,N$ index matches, $t = 1,\dots,T$ index teams, and $y = 1,\dots,Y$ index years.
 
-$h(i), a(i)$: home and away teams in match $i$  
+$h(i), a(i)$: home and away teams in match $i$
 
-$y(i)$: year in which match $i$ is played  
+$y(i)$: year in which match $i$ is played
 
----
+------------------------------------------------------------------------
 
 ### Observed Data
 
-$y_i^{(H)}$: goals scored by the home team in match $i$  
+$y_i^{(H)}$: goals scored by the home team in match $i$
 
-$y_i^{(A)}$: goals scored by the away team in match $i$  
+$y_i^{(A)}$: goals scored by the away team in match $i$
 
----
+------------------------------------------------------------------------
 
 ### Parameters
 
 *Global parameters*
 
-$\mu$: baseline log scoring rate  
+$\mu$: baseline log scoring rate
 
 *Team-year latent strengths*
 
-$\alpha_{t,y}$: attacking strength of team $t$ in year $y$  
+$\alpha_{t,y}$: attacking strength of team $t$ in year $y$
 
-$\beta_{t,y}$: defensive strength of team $t$ in year $y$  
+$\beta_{t,y}$: defensive strength of team $t$ in year $y$
 
 *Time-varying competitiveness*
 
-$\sigma_y$: dispersion of team strengths in year $y$  
+$\sigma_y$: dispersion of team strengths in year $y$
 
-$\omega$: volatility of the evolution of $\sigma_y$  
+$\omega$: volatility of the evolution of $\sigma_y$
 
----
+------------------------------------------------------------------------
 
 ### Likelihood
 
@@ -206,7 +219,7 @@ $$
 \log \lambda_i^{(A)} = \mu + \alpha_{a(i),y(i)} - \beta_{h(i),y(i)}
 $$
 
----
+------------------------------------------------------------------------
 
 ### Team-Level Structure
 
@@ -218,7 +231,7 @@ $$
 \beta_{t,y} \sim \mathcal{N}(0, \sigma_y^2)
 $$
 
----
+------------------------------------------------------------------------
 
 ### Evolution of Competitive Balance
 
@@ -232,7 +245,7 @@ $$
 \varepsilon_y \sim \mathcal{N}(0, \omega^2)
 $$
 
----
+------------------------------------------------------------------------
 
 ### Priors
 
@@ -248,7 +261,7 @@ $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
----
+------------------------------------------------------------------------
 
 ### Posterior
 
@@ -265,7 +278,7 @@ p\left(
 \right)
 $$
 
----
+------------------------------------------------------------------------
 
 ### Quantity of Interest
 
@@ -296,10 +309,10 @@ Monte Carlo simulations (e.g., 10,000 runs) to estimate: - Probability each team
 
 ## Team Contribution Plan
 
-| Member    | Responsibilities                                                      |
+| Member | Responsibilities |
 |--------------------------|----------------------------------------------|
-| Student 1 | Data collection & preprocessing, baseline model implementation        |
-| Student 2 | Hierarchical Bayesian model, Stan model development                   |
+| Student 1 | Data collection & preprocessing, baseline model implementation |
+| Student 2 | Hierarchical Bayesian model, Stan model development |
 | Student 3 | Posterior inference methods, model comparison & tournament simulation |
 
 All members contribute to report writing, visualization, and interpretation.

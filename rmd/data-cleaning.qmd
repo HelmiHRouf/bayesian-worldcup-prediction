@@ -198,8 +198,8 @@ home_summary <- matches %>%
     home_win_pct = mean(home_win) * 100,
     draw_pct = mean(draw) * 100,
     away_win_pct = mean(away_win) * 100,
-    avg_home_goals = mean(home_score),
-    avg_away_goals = mean(away_score)
+    avg_home_score = mean(home_score),
+    avg_away_score = mean(away_score)
   )
 
 home_summary %>% kable(digits = 2)
@@ -218,16 +218,16 @@ tibble(
   theme(legend.position = "none")
 ```
 
-## 4.3 Goals Over Time
+## 4.3 score Over Time
 
 ```{r}
 matches %>%
   group_by(year) %>%
-  summarise(avg_total_goals = mean(total_score)) %>%
-  ggplot(aes(x = year, y = avg_total_goals)) +
+  summarise(avg_total_score = mean(total_score)) %>%
+  ggplot(aes(x = year, y = avg_total_score)) +
   geom_line(color = "steelblue") +
   geom_point() +
-  labs(title = "Average Total Goals per Match Over Time", x = "Year", y = "Avg Goals") +
+  labs(title = "Average Total score per Match Over Time", x = "Year", y = "Avg score") +
   theme_minimal()
 ```
 
@@ -274,15 +274,17 @@ write_csv(team_mapping, "../data/processed/team_mapping.csv")
 stan_data <- list(
   N = nrow(train_matches),
   T = nrow(team_mapping),
-  E = 4,  # number of eras
+  E = 7,  # number of eras
   home_team = train_matches$home_team_id,
   away_team = train_matches$away_team_id,
   era = train_matches$era,
-  home_goals = train_matches$home_goals,
-  away_goals = train_matches$away_goals
-)
+  home_score = train_matches$home_score,
+  away_score = train_matches$away_score,
+  goal_diff = train_matches$home_score - train_matches$away_score,
+  total_goals = train_matches$home_score + train_matches$away_score)
 
 # Save as CSV and RDS for R
+write_csv(matches, "../data/processed/matches.csv")
 write_csv(train_matches, "../data/processed/train_matches.csv")
 write_csv(test_matches, "../data/processed/test_matches.csv")
 write_rds(stan_data, "../data/processed/stan_data.rds")
@@ -299,8 +301,8 @@ summary_stats <- list(
   test_matches = nrow(test_matches),
   unique_teams = nrow(team_mapping),
   date_range = paste(min(matches$date), "to", max(matches$date)),
-  avg_home_goals = round(mean(matches$home_goals), 3),
-  avg_away_goals = round(mean(matches$away_goals), 3),
+  avg_home_score = round(mean(matches$home_score), 3),
+  avg_away_score = round(mean(matches$away_score), 3),
   home_win_rate = round(mean(matches$home_win), 3),
   matches_by_era = matches %>% count(era, era_label) %>% select(-era) %>% deframe() %>% as.list()
 )
