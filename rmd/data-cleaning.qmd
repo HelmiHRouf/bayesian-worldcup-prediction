@@ -169,16 +169,24 @@ cat("Test matches:", nrow(test_matches), "\n")
 
 # 4. Exploratory Data Analysis
 
-## 4.1 Goal Distribution
+## 4.1 Goal Difference Distribution
 
 ```{r}
 matches %>%
-  select(home_score, away_score) %>%
-  pivot_longer(everything(), names_to = "location", values_to = "goals") %>%
-  ggplot(aes(x = goals, fill = location)) +
-  geom_histogram(binwidth = 1, position = "dodge") +
-  scale_fill_manual(values = c("home_score" = "steelblue", "away_score" = "coral")) +
-  labs(title = "Goal Distribution: Home vs Away", x = "Goals Scored", y = "Frequency") +
+  mutate(goal_diff = home_score - away_score,
+         result = case_when(
+           goal_diff > 0 ~ "Home Win",
+           goal_diff == 0 ~ "Draw",
+           goal_diff < 0 ~ "Away Win"
+         )) %>%
+  ggplot(aes(x = goal_diff, fill = result)) +
+  geom_histogram(binwidth = 1, color = "black") +
+  scale_fill_manual(values = c("Home Win" = "steelblue",
+                               "Draw" = "gray",
+                               "Away Win" = "coral")) +
+  labs(title = "Goal Difference (Home - Away)",
+       x = "Goal Difference",
+       y = "Frequency") +
   theme_minimal()
 ```
 
