@@ -12,7 +12,7 @@ library(knitr)
 ```{r}
 # read the csv data
 #result = read.csv(here("data", "raw", "results.csv"))
-results = read.csv("/Users/louischaristias/Documents/UBC/4th Year Term 2/STAT 405/Project FIFA/data/raw/results.csv")
+results = read.csv("../data/raw/results.csv")
 ```
 
 ## 2.2 Quick Data Overview
