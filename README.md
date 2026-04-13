@@ -64,13 +64,13 @@ $\mu$: baseline log scoring rate (global)
 
 $\delta$: home advantage parameter (log scale adjustment)
 
-$\sigma_{\alpha,e}$: dispersion (standard deviation) of attacking strengths across all teams in era $e$, for $e = 1,\dots,7$
+$\alpha_{t,e}$: attacking strength of team $t$ in era $e$
 
-$\sigma_{\beta,e}$: dispersion of defensive strengths across all teams in era $e$, for $e = 1,\dots,7$
+$\beta_{t,e}$: defensive strength of team $t$ in era $e$
 
-$a_t$: attacking strength of team $t$ (latent random effect, drawn from $\mathcal{N}(0, \sigma_{\alpha,e(t)}^2)$)
+$\sigma_{\alpha,e}$: dispersion of attacking strengths across all teams in era $e$
 
-$d_t$: defensive strength of team $t$ (latent random effect, drawn from $\mathcal{N}(0, \sigma_{\beta,e(t)}^2)$)
+$\sigma_{\beta,e}$: dispersion of defensive strengths across all teams in era $e$
 
 ## Model
 
@@ -104,19 +104,20 @@ $$
 
 ------------------------------------------------------------------------
 
+
 ### Priors
 
-**Era-level dispersion parameters** (main quantity of interest):
+**Team-era hierarchy** (each team has era-specific strength):
 
 $$
-\sigma_{\alpha,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,7
+\alpha_{t,e} \sim \mathcal{N}(0, \sigma_{\alpha,e}^2), \quad t = 1,\dots,T, \quad e = 1,\dots,E
 $$
 
 $$
-\sigma_{\beta,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,7
+\beta_{t,e} \sim \mathcal{N}(0, \sigma_{\beta,e}^2), \quad t = 1,\dots,T, \quad e = 1,\dots,E
 $$
 
-**Global parameters:**
+**Era-level dispersion parameters:**
 
 $$
 \mu \sim \mathcal{N}(0,1)
@@ -126,7 +127,7 @@ $$
 \delta \sim \text{HalfNormal}(0,1)
 $$
 
-------------------------------------------------------------------------
+**Global parameters:**
 
 ### Implementation Note
 
@@ -134,14 +135,16 @@ In the Stan implementation, team-level attacking strengths $a_t$ and defensive s
 
 ------------------------------------------------------------------------
 
+
 ## Posterior
 
 We infer the joint posterior over era-level dispersion parameters:
 
 $$
 p\left(
-\mu, \delta,
-\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{7}
+\mu,
+\{\alpha_{t,e}, \beta_{t,e}\}_{t=1,e=1}^{T,E},
+\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
 \mid
 \{y_i^{(H)}, y_i^{(A)}\}_{i=1}^{N}
 \right)
