@@ -7,47 +7,76 @@
 //   - Small sigma  → teams are similar   → more competitive (parity)
 
 data {
-  int<lower=1> N;                         // number of matches
-  int<lower=1> E;                         // number of eras
-  array[N] int<lower=1, upper=E> era;     // era index per match
-  array[N] int<lower=0> home_score;       // score scored by home team
-  array[N] int<lower=0> away_score;       // score scored by away team
+  int<lower=1> N;                         // matches
+  int<lower=1> T;                         // teams
+  int<lower=1> E;                         // eras
+
+  array[N] int<lower=1, upper=T> home_team;
+  array[N] int<lower=1, upper=T> away_team;
+
+  array[T] int<lower=1, upper=E> team_era;   // era of each team
+
+  array[N] int<lower=0> home_score;
+  array[N] int<lower=0> away_score;
 }
 
 parameters {
-  real mu;                    // global baseline log scoring rate
-  vector<lower=0>[E] sigma;  // team strength spread per era
+  real mu;
+
+  vector[T] attack;
+  vector[T] defense;
+
+  vector<lower=1e-3>[E] sigma_att;
+  vector<lower=1e-3>[E] sigma_def;
 }
 
 model {
   // --- Priors ---
   mu ~ normal(0, 1);
-  sigma ~ normal(0, 1);       // half-normal via lower=0 constraint
+
+  sigma_att ~ normal(0, 1);
+  sigma_def ~ normal(0, 1);
+
+  // --- Hierarchical team strengths ---
+  for (t in 1:T) {
+    attack[t] ~ normal(0, sigma_att[team_era[t]]);
+    defense[t] ~ normal(0, sigma_def[team_era[t]]);
+  }
 
   // --- Likelihood ---
-  // phi = 1/sigma^2 maps spread to NegBin precision
   for (i in 1:N) {
-    real phi_i = inv(square(sigma[era[i]]));
-    home_score[i] ~ neg_binomial_2_log(mu, phi_i);
-    away_score[i] ~ neg_binomial_2_log(mu, phi_i);
+    real log_lambda_home = mu
+                           + attack[home_team[i]]
+                           - defense[away_team[i]];
+
+    real log_lambda_away = mu
+                           + attack[away_team[i]]
+                           - defense[home_team[i]];
+
+    home_score[i] ~ poisson_log(log_lambda_home);
+    away_score[i] ~ poisson_log(log_lambda_away);
   }
 }
 
 generated quantities {
-  // Posterior predictive draws
   array[N] int home_score_rep;
   array[N] int away_score_rep;
-
-  // Pointwise log-likelihood (for LOO-CV via loo package)
   vector[N] log_lik;
 
   for (i in 1:N) {
-    real phi_i = inv(square(sigma[era[i]]));
+    real log_lambda_home = mu
+                           + attack[home_team[i]]
+                           - defense[away_team[i]];
 
-    home_score_rep[i] = neg_binomial_2_log_rng(mu, phi_i);
-    away_score_rep[i] = neg_binomial_2_log_rng(mu, phi_i);
+    real log_lambda_away = mu
+                           + attack[away_team[i]]
+                           - defense[home_team[i]];
 
-    log_lik[i] = neg_binomial_2_log_lpmf(home_score[i] | mu, phi_i)
-               + neg_binomial_2_log_lpmf(away_score[i] | mu, phi_i);
+    home_score_rep[i] = poisson_log_rng(log_lambda_home);
+    away_score_rep[i] = poisson_log_rng(log_lambda_away);
+
+    log_lik[i] =
+      poisson_log_lpmf(home_score[i] | log_lambda_home) +
+      poisson_log_lpmf(away_score[i] | log_lambda_away);
   }
 }

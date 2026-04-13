@@ -272,20 +272,20 @@ write_csv(team_mapping, "../data/processed/team_mapping.csv")
 
 # Save training data for Stan
 stan_data <- list(
-  N = nrow(train_matches),
+  N = nrow(matches),
   T = nrow(team_mapping),
   E = 7,  # number of eras
-  home_team = train_matches$home_team_id,
-  away_team = train_matches$away_team_id,
-  era = train_matches$era,
-  home_score = train_matches$home_score,
-  away_score = train_matches$away_score,
-  goal_diff = train_matches$home_score - train_matches$away_score,
-  total_goals = train_matches$home_score + train_matches$away_score)
+  home_team = matches$home_team_id,
+  away_team = matches$away_team_id,
+  era = matches$era,
+  home_score = matches$home_score,
+  away_score = matches$away_score,
+  goal_diff = matches$home_score - matches$away_score,
+  total_goals = matches$home_score + matches$away_score)
 
 # Save as CSV and RDS for R
 write_csv(matches, "../data/processed/matches.csv")
-write_csv(train_matches, "../data/processed/train_matches.csv")
+write_csv(matches, "../data/processed/matches.csv")
 write_csv(test_matches, "../data/processed/test_matches.csv")
 write_rds(stan_data, "../data/processed/stan_data.rds")
 
@@ -297,7 +297,7 @@ message("Data saved to data/processed/")
 ```{r}
 summary_stats <- list(
   total_matches = nrow(matches),
-  train_matches = nrow(train_matches),
+  matches = nrow(matches),
   test_matches = nrow(test_matches),
   unique_teams = nrow(team_mapping),
   date_range = paste(min(matches$date), "to", max(matches$date)),
