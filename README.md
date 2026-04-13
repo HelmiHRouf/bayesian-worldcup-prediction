@@ -62,13 +62,13 @@ $e(i) \in \{1,\dots,E\}$: era of match $i$
 
 $\mu$: baseline log scoring rate
 
-$\alpha_t$: attacking strength of team $t$
+$\alpha_{t,e}$: attacking strength of team $t$ in era $e$
 
-$\beta_t$: defensive strength of team $t$
+$\beta_{t,e}$: defensive strength of team $t$ in era $e$
 
-$\sigma_{\alpha,e}$: dispersion of attacking strengths in era $e$
+$\sigma_{\alpha,e}$: dispersion of attacking strengths across all teams in era $e$
 
-$\sigma_{\beta,e}$: dispersion of defensive strengths in era $e$
+$\sigma_{\beta,e}$: dispersion of defensive strengths across all teams in era $e$
 
 ## Model
 
@@ -92,19 +92,20 @@ $$
 
 ------------------------------------------------------------------------
 
+
 ### Priors
 
-**Team-level hierarchy**
+**Team-era hierarchy** (each team has era-specific strength):
 
 $$
-\alpha_t \sim \mathcal{N}(0, \sigma_{\alpha,e(t)}^2)
+\alpha_{t,e} \sim \mathcal{N}(0, \sigma_{\alpha,e}^2), \quad t = 1,\dots,T, \quad e = 1,\dots,E
 $$
 
 $$
-\beta_t \sim \mathcal{N}(0, \sigma_{\beta,e(t)}^2)
+\beta_{t,e} \sim \mathcal{N}(0, \sigma_{\beta,e}^2), \quad t = 1,\dots,T, \quad e = 1,\dots,E
 $$
 
-**Era-level dispersion parameters**
+**Era-level dispersion parameters:**
 
 $$
 \sigma_{\alpha,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,E
@@ -114,13 +115,14 @@ $$
 \sigma_{\beta,e} \sim \text{HalfNormal}(0,1), \quad e = 1,\dots,E
 $$
 
-**Global parameters**
+**Global parameters:**
 
 $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
 ------------------------------------------------------------------------
+
 
 ## Posterior
 
@@ -129,7 +131,7 @@ We infer the joint posterior:
 $$
 p\left(
 \mu,
-\{\alpha_t, \beta_t\}_{t=1}^{T},
+\{\alpha_{t,e}, \beta_{t,e}\}_{t=1,e=1}^{T,E},
 \{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
 \mid
 \{y_i^{(H)}, y_i^{(A)}\}_{i=1}^{N}
