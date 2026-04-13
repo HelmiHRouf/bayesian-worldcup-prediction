@@ -79,30 +79,25 @@ fit <- model$sample(
 fit$cmdstan_diagnose()
 
 fit$summary(
-  variables = c("mu", "home_adv", "sigma_att", "sigma_def")
+  variables = c("mu", "sigma_att", "sigma_def")
 ) %>% print(n = 20)
 
 # ---- 8. Extract draws --------------------------------------------------------
 
 draws <- fit$draws(format = "df")
 
-# ---- 9. Era labels -----------------------------------------------------------
-
-era_labels <- readRDS("data/processed/era_labels.rds")
-
-cat("\nEra mapping:\n")
-print(era_labels)
+# ---- 9. Era labels (REMOVED) -------------------------------------------------
+# No external file needed
 
 # ---- 10. Plot sigma_att ------------------------------------------------------
 
 sigma_att_draws <- draws %>%
   select(starts_with("sigma_att")) %>%
   pivot_longer(everything(), names_to = "param", values_to = "value") %>%
-  mutate(era = as.integer(str_extract(param, "\\d+"))) %>%
-  left_join(era_labels, by = "era")
+  mutate(era = as.integer(str_extract(param, "\\d+")))
 
 sigma_att_summary <- sigma_att_draws %>%
-  group_by(era, era_label) %>%
+  group_by(era) %>%
   summarise(
     median = median(value),
     lo80   = quantile(value, 0.10),
@@ -117,10 +112,7 @@ p_att <- ggplot(sigma_att_summary, aes(x = era, y = median)) +
   geom_ribbon(aes(ymin = lo80, ymax = hi80), alpha = 0.30) +
   geom_line(linewidth = 1) +
   geom_point(size = 3) +
-  scale_x_continuous(
-    breaks = era_labels$era,
-    labels = era_labels$era_label
-  ) +
+  scale_x_continuous(breaks = sigma_att_summary$era) +
   labs(
     title = "Attack Strength Dispersion Over Eras",
     subtitle = "Lower values → more parity → more unpredictability",
@@ -136,11 +128,10 @@ print(p_att)
 sigma_def_draws <- draws %>%
   select(starts_with("sigma_def")) %>%
   pivot_longer(everything(), names_to = "param", values_to = "value") %>%
-  mutate(era = as.integer(str_extract(param, "\\d+"))) %>%
-  left_join(era_labels, by = "era")
+  mutate(era = as.integer(str_extract(param, "\\d+")))
 
 sigma_def_summary <- sigma_def_draws %>%
-  group_by(era, era_label) %>%
+  group_by(era) %>%
   summarise(
     median = median(value),
     lo80   = quantile(value, 0.10),
@@ -155,10 +146,7 @@ p_def <- ggplot(sigma_def_summary, aes(x = era, y = median)) +
   geom_ribbon(aes(ymin = lo80, ymax = hi80), alpha = 0.30) +
   geom_line(linewidth = 1) +
   geom_point(size = 3) +
-  scale_x_continuous(
-    breaks = era_labels$era,
-    labels = era_labels$era_label
-  ) +
+  scale_x_continuous(breaks = sigma_def_summary$era) +
   labs(
     title = "Defense Strength Dispersion Over Eras",
     subtitle = "Lower values → more parity",
@@ -168,33 +156,3 @@ p_def <- ggplot(sigma_def_summary, aes(x = era, y = median)) +
   theme_minimal(base_size = 14)
 
 print(p_def)
-
-# ---- 12. Posterior predictive check ------------------------------------------
-
-home_rep <- fit$draws("home_score_rep", format = "matrix")
-away_rep <- fit$draws("away_score_rep", format = "matrix")
-
-p_ppc_home <- ppc_dens_overlay(stan_data$home_score, home_rep[1:200, ]) +
-  theme_minimal()
-
-p_ppc_away <- ppc_dens_overlay(stan_data$away_score, away_rep[1:200, ]) +
-  theme_minimal()
-
-print(p_ppc_home)
-print(p_ppc_away)
-
-# ---- 13. LOO-CV --------------------------------------------------------------
-
-log_lik <- fit$draws("log_lik", format = "matrix")
-loo_result <- loo(log_lik)
-print(loo_result)
-
-# ---- 14. Trace plots ---------------------------------------------------------
-
-mcmc_trace(
-  draws,
-  pars = c("mu", "home_adv",
-           paste0("sigma_att[", 1:stan_data$E, "]"))
-) + theme_minimal()
-
-cat("\nDone.\n")
