@@ -177,7 +177,7 @@ matches %>%
   pivot_longer(everything(), names_to = "location", values_to = "goals") %>%
   ggplot(aes(x = goals, fill = location)) +
   geom_histogram(binwidth = 1, position = "dodge") +
-  scale_fill_manual(values = c("home_goals" = "steelblue", "away_goals" = "coral")) +
+  scale_fill_manual(values = c("home_score" = "steelblue", "away_score" = "coral")) +
   labs(title = "Goal Distribution: Home vs Away", x = "Goals Scored", y = "Frequency") +
   theme_minimal()
 ```
