@@ -1,4 +1,5 @@
 ## 1. Load Required Libraries
+
 ```{r}
 library(tidyverse)
 library(lubridate)
@@ -7,10 +8,11 @@ library(knitr)
 ```
 
 ## 2.1 Data Loading
+
 ```{r}
 # read the csv data
 #result = read.csv(here("data", "raw", "results.csv"))
-results = read.csv("../data/raw/results.csv")
+results = read.csv("/Users/louischaristias/Documents/UBC/4th Year Term 2/STAT 405/Project FIFA/data/raw/results.csv")
 ```
 
 ## 2.2 Quick Data Overview
@@ -93,6 +95,7 @@ cat("After filtering, column names are:", for (col in colnames(results_fifa_memb
 ```
 
 ## 3.3 Create Team ID Mapping
+
 ```{r team-ids}
 all_teams <- sort(unique(c(results_fifa_member$home_team, results_fifa_member$away_team)))
 team_mapping <- tibble(
@@ -123,6 +126,7 @@ matches <- results_fifa_member %>%
 
 head(matches) %>% kable()
 ```
+
 ## 3.5 Define Eras for Hierarchical Model
 
 ```{r define-eras}
@@ -161,4 +165,137 @@ train_matches <- matches %>% anti_join(test_matches, by = "match_id")
 
 cat("Training matches:", nrow(train_matches), "\n")
 cat("Test matches:", nrow(test_matches), "\n")
+```
+
+# 4. Exploratory Data Analysis
+
+## 4.1 Goal Distribution
+
+```{r}
+matches %>%
+  select(home_score, away_score) %>%
+  pivot_longer(everything(), names_to = "location", values_to = "goals") %>%
+  ggplot(aes(x = goals, fill = location)) +
+  geom_histogram(binwidth = 1, position = "dodge") +
+  scale_fill_manual(values = c("home_goals" = "steelblue", "away_goals" = "coral")) +
+  labs(title = "Goal Distribution: Home vs Away", x = "Goals Scored", y = "Frequency") +
+  theme_minimal()
+```
+
+## 4.2 Home Advantage
+
+```{r}
+home_summary <- matches %>%
+  summarise(
+    home_win_pct = mean(home_win) * 100,
+    draw_pct = mean(draw) * 100,
+    away_win_pct = mean(away_win) * 100,
+    avg_home_goals = mean(home_score),
+    avg_away_goals = mean(away_score)
+  )
+
+home_summary %>% kable(digits = 2)
+
+# Visualize
+tibble(
+  outcome = c("Home Win", "Draw", "Away Win"),
+  percentage = c(home_summary$home_win_pct, home_summary$draw_pct, home_summary$away_win_pct)
+) %>%
+  ggplot(aes(x = outcome, y = percentage, fill = outcome)) +
+  geom_col() +
+  geom_text(aes(label = sprintf("%.1f%%", percentage)), vjust = -0.5) +
+  ylim(0, 50) +
+  labs(title = "Match Outcome Distribution") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+## 4.3 Goals Over Time
+
+```{r}
+matches %>%
+  group_by(year) %>%
+  summarise(avg_total_goals = mean(total_score)) %>%
+  ggplot(aes(x = year, y = avg_total_goals)) +
+  geom_line(color = "steelblue") +
+  geom_point() +
+  labs(title = "Average Total Goals per Match Over Time", x = "Year", y = "Avg Goals") +
+  theme_minimal()
+```
+
+## 4.4 Top Teams by Match Count (for reference)
+
+```{r}
+team_counts <- matches %>%
+  select(team = home_team) %>%
+  bind_rows(matches %>% select(team = away_team)) %>%
+  count(team, sort = TRUE) %>%
+  head(20)
+
+team_counts %>% kable()
+```
+
+## 4.5 2026 World Cup Participants
+
+```{r}
+# Teams expected in 2026 World Cup (expand as needed)
+wc_2026_teams <- c(
+  # Auto-qualified hosts
+  "United States", "Canada", "Mexico",
+  # Major historical teams (add more as qualification progresses)
+  "Brazil", "Argentina", "France", "Germany", "Spain", "England",
+  "Netherlands", "Italy", "Portugal", "Belgium", "Uruguay",
+  "Japan", "South Korea", "Australia"
+)
+
+wc_teams_present <- team_mapping %>%
+  filter(team %in% wc_2026_teams) %>%
+  arrange(team)
+
+wc_teams_present %>% kable()
+cat("\nWorld Cup teams with data:", nrow(wc_teams_present), "/", length(wc_2026_teams), "\n")
+```
+
+# 5. Save Processed Data
+
+```{r}
+# Save team mapping
+write_csv(team_mapping, "../data/processed/team_mapping.csv")
+
+# Save training data for Stan
+stan_data <- list(
+  N = nrow(train_matches),
+  T = nrow(team_mapping),
+  E = 4,  # number of eras
+  home_team = train_matches$home_team_id,
+  away_team = train_matches$away_team_id,
+  era = train_matches$era,
+  home_goals = train_matches$home_goals,
+  away_goals = train_matches$away_goals
+)
+
+# Save as CSV and RDS for R
+write_csv(train_matches, "../data/processed/train_matches.csv")
+write_csv(test_matches, "../data/processed/test_matches.csv")
+write_rds(stan_data, "../data/processed/stan_data.rds")
+
+message("Data saved to data/processed/")
+```
+
+# 6. Summary for Report
+
+```{r}
+summary_stats <- list(
+  total_matches = nrow(matches),
+  train_matches = nrow(train_matches),
+  test_matches = nrow(test_matches),
+  unique_teams = nrow(team_mapping),
+  date_range = paste(min(matches$date), "to", max(matches$date)),
+  avg_home_goals = round(mean(matches$home_goals), 3),
+  avg_away_goals = round(mean(matches$away_goals), 3),
+  home_win_rate = round(mean(matches$home_win), 3),
+  matches_by_era = matches %>% count(era, era_label) %>% select(-era) %>% deframe() %>% as.list()
+)
+
+print(summary_stats)
 ```
