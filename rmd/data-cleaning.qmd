@@ -1,0 +1,164 @@
+## 1. Load Required Libraries
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(knitr)
+```
+
+## 2.1 Data Loading
+```{r}
+# read the csv data
+#result = read.csv(here("data", "raw", "results.csv"))
+results = read.csv("../data/raw/results.csv")
+```
+
+## 2.2 Quick Data Overview
+
+```{r overview}
+cat("Dataset shape:", nrow(results), "rows x", ncol(results), "columns\n")
+cat("Date range:", min(results$date), "to", max(results$date), "\n")
+cat("Unique teams:", length(unique(c(results$home_team, results$away_team))), "\n")
+cat("Total matches:", nrow(results), "\n")
+```
+
+## 3.1 Filter for Modern Era (1998-2024)
+
+```{r filter-era}
+results_clean <- results %>%
+  filter(year(date) >= 1998) %>%
+  mutate(
+    year = year(date),
+    month = month(date),
+    home_score = as.numeric(home_score),
+    away_score = as.numeric(away_score)
+  ) %>%
+  filter(!is.na(home_score), !is.na(away_score), tournament != "Friendly")%>%
+    select(-c(tournament, city, country, neutral, date))
+```
+
+## 3.2 filter to only fifa member countries
+
+```{r filter to fifa member countries only}
+fifa_members_2024 <- c(
+  "Afghanistan", "Albania", "Algeria", "American Samoa", "Andorra", "Angola", 
+  "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria", 
+  "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", 
+  "Belgium", "Belize", "Benin", "Bermuda", "Bhutan", "Bolivia", 
+  "Bosnia and Herzegovina", "Botswana", "Brazil", "British Virgin Islands", 
+  "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", 
+  "Cape Verde", "Cayman Islands", "Central African Republic", "Chad", "Chile", 
+  "China", "Colombia", "Comoros", "Congo", "Congo DR", "Costa Rica", 
+  "Croatia", "Cuba", "Curacao", "Cyprus", "Czech Republic", "Denmark", 
+  "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", 
+  "El Salvador", "England", "Equatorial Guinea", "Eritrea", "Estonia", 
+  "Eswatini", "Ethiopia", "Faroe Islands", "Fiji", "Finland", "France", 
+  "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Gibraltar", "Greece", 
+  "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", 
+  "Honduras", "Hong Kong", "Hungary", "Iceland", "India", "Indonesia", 
+  "Iran", "Iraq", "Israel", "Italy", "Ivory Coast", "Jamaica", "Japan", 
+  "Jordan", "Kazakhstan", "Kenya", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", 
+  "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", 
+  "Lithuania", "Luxembourg", "Macau", "Madagascar", "Malawi", "Malaysia", 
+  "Maldives", "Mali", "Malta", "Mauritania", "Mauritius", "Mexico", 
+  "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", 
+  "Myanmar", "Namibia", "Nepal", "Netherlands", "New Caledonia", "New Zealand", 
+  "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", 
+  "Northern Ireland", "Norway", "Oman", "Pakistan", "Palestine", "Panama", 
+  "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", 
+  "Puerto Rico", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", 
+  "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", 
+  "Sao Tome and Principe", "Saudi Arabia", "Scotland", "Senegal", "Serbia", 
+  "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", 
+  "Solomon Islands", "Somalia", "South Africa", "South Korea", "South Sudan", 
+  "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", 
+  "Tahiti", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", 
+  "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", 
+  "Turks and Caicos Islands", "Tuvalu", "Uganda", "Ukraine", 
+  "United Arab Emirates", "United States", "United States Virgin Islands", 
+  "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela", "Vietnam", "Wales", 
+  "Yemen", "Zambia", "Zimbabwe"
+)
+
+# Filter to FIFA members only
+results_fifa_member <- results_clean %>%
+  filter(home_team %in% fifa_members_2024, away_team %in% fifa_members_2024)
+```
+
+```{r check every column's name}
+cat("After filtering, column names are:", for (col in colnames(results_fifa_member)) {
+  print(col)
+}
+)
+```
+
+## 3.3 Create Team ID Mapping
+```{r team-ids}
+all_teams <- sort(unique(c(results_fifa_member$home_team, results_fifa_member$away_team)))
+team_mapping <- tibble(
+  team = all_teams,
+  team_id = seq_along(all_teams)
+)
+
+head(team_mapping, 15) %>% kable()
+cat("Total teams in modern era:", nrow(team_mapping), "\n")
+```
+
+# 3.4 Add Team IDs to Matches
+
+```{r add-ids}
+matches <- results_fifa_member %>%
+  left_join(team_mapping, by = c("home_team" = "team")) %>%
+  rename(home_team_id = team_id) %>%
+  left_join(team_mapping, by = c("away_team" = "team")) %>%
+  rename(away_team_id = team_id) %>%
+  mutate(
+    match_id = row_number(),
+    total_score = home_score + away_score,
+    goal_diff = home_score - away_score,
+    home_win = as.integer(home_score > away_score),
+    draw = as.integer(home_score == away_score),
+    away_win = as.integer(home_score < away_score)
+  )
+
+head(matches) %>% kable()
+```
+## 3.5 Define Eras for Hierarchical Model
+
+```{r define-eras}
+matches <- matches %>%
+  mutate(
+    era = case_when(
+      year <= 2002 ~ 1,  # 1998-2002
+      year <= 2006 ~ 2,  # 2002-2006
+      year <= 2010 ~ 3,  # 2006-2010
+      year <= 2014 ~ 4,  # 2010-2014
+      year <= 2018 ~ 5,  # 2014-2018
+      year <= 2022 ~ 6,  # 2018-2022
+      TRUE ~ 7           # 2022-2026 (recent for 2026 prediction)
+    ),
+    era_label = case_when(
+      era == 1 ~ "1998-2002",
+      era == 2 ~ "2002-2006",
+      era == 3 ~ "2006-2010",
+      era == 4 ~ "2010-2014",
+      era == 5 ~ "2014-2018",
+      era == 6 ~ "2018-2022",
+      era == 7 ~ "2022-2026"
+    )
+  )
+
+matches %>% count(era, era_label) %>% kable()
+```
+
+## 3.6 Create Train/Test Split
+
+```{r train-test}
+# Use most recent 2024 matches as test set for predictive validation
+# Or use random 10% split
+test_matches <- matches %>% filter(year > 2022) 
+train_matches <- matches %>% anti_join(test_matches, by = "match_id")
+
+cat("Training matches:", nrow(train_matches), "\n")
+cat("Test matches:", nrow(test_matches), "\n")
+```
