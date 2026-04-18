@@ -62,8 +62,6 @@ $e(i) \in \{1,\dots,E\}$: era of match $i$
 
 $\mu$: baseline log scoring rate (global)
 
-$\delta$: home advantage parameter (log scale adjustment)
-
 $\alpha_{t,e}$: attacking strength of team $t$ in era $e$
 
 $\beta_{t,e}$: defensive strength of team $t$ in era $e$
@@ -85,7 +83,7 @@ y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
 $$
 
 $$
-\log \lambda_i^{(H)} = \mu + \delta + a_{h(i)} - d_{a(i)}
+\log \lambda_i^{(H)} = \mu + a_{h(i)} - d_{a(i)}
 $$
 
 $$
@@ -123,9 +121,6 @@ $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
-$$
-\delta \sim \text{HalfNormal}(0,1)
-$$
 
 **Global parameters:**
 
