@@ -5,7 +5,7 @@
 // Key quantity of interest: sigma[e] = spread of team strengths per era.
 //   - Large sigma  → teams differ a lot  → less competitive
 //   - Small sigma  → teams are similar   → more competitive (parity)
-
+// haloo
 data {
   int<lower=1> N;                         // matches
   int<lower=1> T;                         // teams
