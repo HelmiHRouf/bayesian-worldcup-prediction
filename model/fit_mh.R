@@ -228,8 +228,8 @@ m1_summary <- tibble(
 )
 
 p_m1 <- ggplot(m1_summary, aes(x = era, y = median_sa)) +
-  geom_ribbon(aes(ymin = lo95_sa, ymax = hi95_sa), alpha = 0.15) +
-  geom_ribbon(aes(ymin = lo80_sa, ymax = hi80_sa), alpha = 0.30) +
+  geom_ribbon(aes(ymin = lo95_sa, ymax = hi95_sa), alpha = 0.15, fill = "steelblue") +
+  geom_ribbon(aes(ymin = lo80_sa, ymax = hi80_sa), alpha = 0.30, fill = "steelblue") +
   geom_line(linewidth = 1, color = "steelblue") +
   geom_point(size = 3) +
   scale_x_continuous(breaks = 1:E, labels = era_labels) +
@@ -268,8 +268,8 @@ m1_summary_sb <- tibble(
 )
 
 p_m1_sb <- ggplot(m1_summary_sb, aes(x = era, y = median_sb)) +
-  geom_ribbon(aes(ymin = lo95_sb, ymax = hi95_sb), alpha = 0.15) +
-  geom_ribbon(aes(ymin = lo80_sb, ymax = hi80_sb), alpha = 0.30) +
+  geom_ribbon(aes(ymin = lo95_sb, ymax = hi95_sb), alpha = 0.15, fill = "firebrick") +
+  geom_ribbon(aes(ymin = lo80_sb, ymax = hi80_sb), alpha = 0.30, fill = "firebrick") +
   geom_line(linewidth = 1, color = "firebrick") +
   geom_point(size = 3) +
   scale_x_continuous(breaks = 1:E, labels = era_labels) +
