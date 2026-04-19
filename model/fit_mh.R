@@ -1,3 +1,6 @@
+library(tidyverse)
+
+
 # =============================================================================
 # fit_mh.R — Metropolis-Hastings for Model 1 and Model 2
 #
@@ -12,8 +15,6 @@
 #   Model 2: infer {sigma_y} for y = 1..Y  (via random walk on log_sigma)
 #             plus omega (volatility) and mu
 # =============================================================================
-
-library(tidyverse)
 
 set.seed(2026)
 
@@ -57,30 +58,71 @@ Y <- nrow(year_mapping)
 # averaging the Poisson likelihoods. This marginalizes out team strengths.
 # =============================================================================
 
-S <- 300  # Monte Carlo samples for marginal likelihood (increase for accuracy)
+S <- 150  # Monte Carlo samples for marginal likelihood (increase for accuracy)
 
-marginal_log_lik_match <- function(home_goals, away_goals,
-                                   mu, sigma_atk, sigma_def) {
-  # Sample team strength differences from their marginal (convolution of Normals)
-  # attack_h - defense_a ~ N(0, sigma_atk^2 + sigma_def^2)
-  # attack_a - defense_h ~ N(0, sigma_atk^2 + sigma_def^2)
+# OPTIMIZATION: Pre-split data by block (era for Model 1, year for Model 2)
+# and pre-generate standard normal draws once per block.
+# Because N(0, sigma^2) == sigma * N(0,1), we reuse the same Z for every
+# sigma value (Common Random Numbers). This removes rnorm() from the inner
+# loop and smooths the Monte Carlo surface.
+
+m1_blocks <- matches %>%
+  group_by(era) %>%
+  summarise(
+    home_score = list(home_score),
+    away_score = list(away_score),
+    .groups = "drop"
+  ) %>%
+  arrange(era)
+
+m2_blocks <- matches %>%
+  group_by(year_id) %>%
+  summarise(
+    home_score = list(home_score),
+    away_score = list(away_score),
+    .groups = "drop"
+  ) %>%
+  arrange(year_id)
+
+# Pre-generated Z matrices for each block
+Z_m1 <- vector("list", E)
+for (e in 1:E) {
+  n_e <- length(m1_blocks$home_score[[e]])
+  Z_m1[[e]] <- list(
+    home = matrix(rnorm(n_e * S), nrow = n_e, ncol = S),
+    away = matrix(rnorm(n_e * S), nrow = n_e, ncol = S)
+  )
+}
+
+Z_m2 <- vector("list", Y)
+for (y in 1:Y) {
+  n_y <- length(m2_blocks$home_score[[y]])
+  Z_m2[[y]] <- list(
+    home = matrix(rnorm(n_y * S), nrow = n_y, ncol = S),
+    away = matrix(rnorm(n_y * S), nrow = n_y, ncol = S)
+  )
+}
+
+# Fast block likelihood: only evaluates matches in ONE era/year.
+# Z_home and Z_away are the pre-generated N(0,1) matrices for that block.
+marginal_log_lik_block <- function(home_goals, away_goals,
+                                   mu, sigma_atk, sigma_def,
+                                   Z_home, Z_away) {
+  if (sigma_atk <= 0 || sigma_def <= 0) return(-Inf)
+
   sigma_combined <- sqrt(sigma_atk^2 + sigma_def^2)
+  diff_home <- sigma_combined * Z_home   # N x S
+  diff_away <- sigma_combined * Z_away   # N x S
 
-  strength_diff_home <- rnorm(S, 0, sigma_combined)
-  strength_diff_away <- rnorm(S, 0, sigma_combined)
+  log_lambda_home <- mu + diff_home
+  log_lambda_away <- mu + diff_away
 
-  log_lambda_home <- mu + strength_diff_home
-  log_lambda_away <- mu + strength_diff_away
-
-  # Poisson log-likelihood for each MC sample
   ll_home <- dpois(home_goals, exp(log_lambda_home), log = TRUE)
   ll_away <- dpois(away_goals, exp(log_lambda_away), log = TRUE)
+  ll      <- ll_home + ll_away           # N x S
 
-  # log of mean of exp(ll) = log-sum-exp trick
-  ll_combined <- ll_home + ll_away
-  log_mean_exp <- max(ll_combined) + log(mean(exp(ll_combined - max(ll_combined))))
-
-  return(log_mean_exp)
+  ll_max  <- apply(ll, 1, max)
+  sum(ll_max + log(rowMeans(exp(ll - ll_max))))
 }
 
 # =============================================================================
@@ -93,31 +135,14 @@ cat("Parameters: mu, sigma_alpha[e], sigma_beta[e] for e = 1..7\n\n")
 
 # ---- Log posterior (Model 1) ------------------------------------------------
 
-log_posterior_m1 <- function(mu, sigma_alpha, sigma_beta) {
-
-  # Priors (from your README)
+log_prior_m1 <- function(mu, sigma_alpha, sigma_beta) {
   lp <- dnorm(mu, 0, 1, log = TRUE)
-
-  # HalfNormal(0,1) priors on sigma parameters
-  # HalfNormal(0,1) = Normal(0,1) truncated to positive => log_p = log(2) + dnorm
   for (e in 1:E) {
     if (sigma_alpha[e] <= 0 || sigma_beta[e] <= 0) return(-Inf)
     lp <- lp + log(2) + dnorm(sigma_alpha[e], 0, 1, log = TRUE)
     lp <- lp + log(2) + dnorm(sigma_beta[e],  0, 1, log = TRUE)
   }
-
-  # Marginal likelihood over all matches
-  ll <- 0
-  for (i in seq_len(nrow(matches))) {
-    e <- matches$era[i]
-    if (is.na(e)) next
-    ll <- ll + marginal_log_lik_match(
-      matches$home_score[i], matches$away_score[i],
-      mu, sigma_alpha[e], sigma_beta[e]
-    )
-  }
-
-  return(lp + ll)
+  lp
 }
 
 # ---- MH sampler (Model 1) ---------------------------------------------------
@@ -138,7 +163,17 @@ mh_model1 <- function(n_iter     = 2000,
   chain_sb    <- matrix(NA, n_store, E)
   n_accept    <- 0
 
-  lp_current <- log_posterior_m1(mu, sigma_alpha, sigma_beta)
+  # OPTIMIZATION: Cache likelihood contributions per era.
+  # Only the era whose dispersion changed is recomputed.
+  ll_era <- numeric(E)
+  for (e in 1:E) {
+    ll_era[e] <- marginal_log_lik_block(
+      m1_blocks$home_score[[e]], m1_blocks$away_score[[e]],
+      mu, sigma_alpha[e], sigma_beta[e],
+      Z_m1[[e]]$home, Z_m1[[e]]$away
+    )
+  }
+  lp_current <- log_prior_m1(mu, sigma_alpha, sigma_beta) + sum(ll_era)
 
   cat("Running MH for Model 1...\n")
 
@@ -150,9 +185,19 @@ mh_model1 <- function(n_iter     = 2000,
 
     # --- Block 1: update mu alone ---
     mu_prop <- mu + rnorm(1, 0, proposal_sd)
-    lp_prop <- log_posterior_m1(mu_prop, sigma_alpha, sigma_beta)
+    # mu is shared across all eras → recompute every block
+    ll_era_prop <- numeric(E)
+    for (e in 1:E) {
+      ll_era_prop[e] <- marginal_log_lik_block(
+        m1_blocks$home_score[[e]], m1_blocks$away_score[[e]],
+        mu_prop, sigma_alpha[e], sigma_beta[e],
+        Z_m1[[e]]$home, Z_m1[[e]]$away
+      )
+    }
+    lp_prop <- log_prior_m1(mu_prop, sigma_alpha, sigma_beta) + sum(ll_era_prop)
     if (log(runif(1)) < lp_prop - lp_current) {
       mu         <- mu_prop
+      ll_era     <- ll_era_prop
       lp_current <- lp_prop
       n_accept   <- n_accept + 1
     }
@@ -161,9 +206,22 @@ mh_model1 <- function(n_iter     = 2000,
     for (e in seq_len(E)) {
       sa_prop    <- sigma_alpha
       sa_prop[e] <- abs(sigma_alpha[e] + rnorm(1, 0, proposal_sd))
-      lp_prop    <- log_posterior_m1(mu, sa_prop, sigma_beta)
+      if (sa_prop[e] <= 0) next   # prior = -Inf, auto-reject
+
+      ll_e_prop <- marginal_log_lik_block(
+        m1_blocks$home_score[[e]], m1_blocks$away_score[[e]],
+        mu, sa_prop[e], sigma_beta[e],
+        Z_m1[[e]]$home, Z_m1[[e]]$away
+      )
+
+      # Only the prior term for this e changes; log(2) constants cancel
+      prior_diff <- dnorm(sa_prop[e], 0, 1, log = TRUE) -
+        dnorm(sigma_alpha[e], 0, 1, log = TRUE)
+      lp_prop <- lp_current + prior_diff - ll_era[e] + ll_e_prop
+
       if (log(runif(1)) < lp_prop - lp_current) {
         sigma_alpha <- sa_prop
+        ll_era[e]   <- ll_e_prop
         lp_current  <- lp_prop
       }
     }
@@ -172,9 +230,21 @@ mh_model1 <- function(n_iter     = 2000,
     for (e in seq_len(E)) {
       sb_prop    <- sigma_beta
       sb_prop[e] <- abs(sigma_beta[e] + rnorm(1, 0, proposal_sd))
-      lp_prop    <- log_posterior_m1(mu, sigma_alpha, sb_prop)
+      if (sb_prop[e] <= 0) next   # prior = -Inf, auto-reject
+
+      ll_e_prop <- marginal_log_lik_block(
+        m1_blocks$home_score[[e]], m1_blocks$away_score[[e]],
+        mu, sigma_alpha[e], sb_prop[e],
+        Z_m1[[e]]$home, Z_m1[[e]]$away
+      )
+
+      prior_diff <- dnorm(sb_prop[e], 0, 1, log = TRUE) -
+        dnorm(sigma_beta[e], 0, 1, log = TRUE)
+      lp_prop <- lp_current + prior_diff - ll_era[e] + ll_e_prop
+
       if (log(runif(1)) < lp_prop - lp_current) {
         sigma_beta <- sb_prop
+        ll_era[e]  <- ll_e_prop
         lp_current <- lp_prop
       }
     }
@@ -196,9 +266,8 @@ mh_model1 <- function(n_iter     = 2000,
        sigma_beta  = chain_sb,
        accept_rate = n_accept / n_iter)
 }
-
 # Run Model 1 MH
-mh1 <- mh_model1(n_iter = 5000, n_warmup = 1000, proposal_sd = 0.05)
+mh1 <- mh_model1(n_iter = 2000, n_warmup = 500, proposal_sd = 0.05)
 
 # ---- Summarise Model 1 results ----------------------------------------------
 
@@ -253,8 +322,6 @@ ggsave("figures/model1_mh_sigma_alpha_trajectory.png", p_m1,
 
 # Save Model 1 MH results
 saveRDS(mh1, "data/processed/mh_fit_model1.rds")
-
-
 # ---- Plot Model 1 sigma_beta trajectory ------------------------------------
 
 m1_summary_sb <- tibble(
@@ -299,7 +366,6 @@ plot(mh1$sigma_alpha[,1], type = "l", main = "Trace: sigma_alpha[1]", ylab = "si
 plot(mh1$sigma_beta[,1],  type = "l", main = "Trace: sigma_beta[1]",  ylab = "sigma_beta[1]")
 dev.off()
 
-# =============================================================================
 # MODEL 2: MH for time-varying sigma via random walk
 # Parameters: mu, log_sigma[1..Y], omega
 # (team strengths marginalized out as above)
@@ -315,54 +381,57 @@ cat("Parameters: mu, log_sigma[y] for y=1..Y, omega\n\n")
 
 # ---- Log posterior (Model 2) ------------------------------------------------
 
-log_posterior_m2 <- function(mu, log_sigma, omega) {
-
+log_prior_m2 <- function(mu, log_sigma, omega) {
   if (omega <= 0) return(-Inf)
-
   Y_local <- length(log_sigma)
   sigma   <- exp(log_sigma)
 
-  # Priors (from your README)
   lp <- dnorm(mu, 0, 1, log = TRUE)
-
-  # sigma[1] ~ HalfNormal(0, 1)  =>  log_sigma[1] ~ log-HalfNormal
-  # We put prior on sigma[1] directly
   lp <- lp + log(2) + dnorm(sigma[1], 0, 1, log = TRUE) + log_sigma[1]
-  # (Jacobian: d(sigma)/d(log_sigma) = sigma)
-
-  # omega ~ HalfNormal(0, 0.5)
-  if (omega <= 0) return(-Inf)
   lp <- lp + log(2) + dnorm(omega, 0, 0.5, log = TRUE)
 
-  # Random walk prior on log_sigma[2..Y]
   for (y in 2:Y_local) {
     lp <- lp + dnorm(log_sigma[y], log_sigma[y - 1], omega, log = TRUE)
   }
+  lp
+}
 
-  # Marginal likelihood: sigma_alpha = sigma_beta = sigma[y] per your README
-  ll <- 0
-  for (i in seq_len(nrow(matches))) {
-    y_idx <- matches$year_id[i]
-    if (is.na(y_idx)) next
-    ll <- ll + marginal_log_lik_match(
-      matches$home_score[i], matches$away_score[i],
-      mu, sigma[y_idx], sigma[y_idx]   # attack and defense share sigma[y]
-    )
+# Helper: prior difference when only log_sigma[y] changes.
+# Avoids recomputing the full random-walk prior.
+prior_diff_logsigma <- function(log_sigma_prop, log_sigma_curr, omega, y, Y_local) {
+  diff <- 0
+  if (y == 1) {
+    s_prop <- exp(log_sigma_prop[1])
+    s_curr <- exp(log_sigma_curr[1])
+    diff <- diff + (dnorm(s_prop, 0, 1, log = TRUE) + log_sigma_prop[1]) -
+      (dnorm(s_curr, 0, 1, log = TRUE) + log_sigma_curr[1])
+    if (Y_local > 1) {
+      diff <- diff + dnorm(log_sigma_curr[2], log_sigma_prop[1], omega, log = TRUE) -
+        dnorm(log_sigma_curr[2], log_sigma_curr[1], omega, log = TRUE)
+    }
+  } else if (y < Y_local) {
+    diff <- diff + dnorm(log_sigma_prop[y], log_sigma_curr[y - 1], omega, log = TRUE) -
+      dnorm(log_sigma_curr[y], log_sigma_curr[y - 1], omega, log = TRUE)
+    diff <- diff + dnorm(log_sigma_curr[y + 1], log_sigma_prop[y], omega, log = TRUE) -
+      dnorm(log_sigma_curr[y + 1], log_sigma_curr[y], omega, log = TRUE)
+  } else {
+    diff <- diff + dnorm(log_sigma_prop[y], log_sigma_curr[y - 1], omega, log = TRUE) -
+      dnorm(log_sigma_curr[y], log_sigma_curr[y - 1], omega, log = TRUE)
   }
-
-  return(lp + ll)
+  diff
 }
 
 # ---- MH sampler (Model 2) ---------------------------------------------------
 
 mh_model2 <- function(n_iter      = 2000,
-                       n_warmup    = 500,
-                       proposal_sd = 0.03) {
+                      n_warmup    = 500,
+                      proposal_sd = 0.03) {
 
   # Initialize
   mu        <- 0.0
   log_sigma <- rep(log(0.5), Y)   # start sigma at ~0.5
   omega     <- 0.3
+  sigma     <- exp(log_sigma)
 
   # Storage
   n_store       <- n_iter - n_warmup
@@ -371,7 +440,17 @@ mh_model2 <- function(n_iter      = 2000,
   chain_omega   <- numeric(n_store)
   n_accept      <- 0
 
-  lp_current <- log_posterior_m2(mu, log_sigma, omega)
+  # OPTIMIZATION: Cache likelihood contributions per year.
+  # Only the year whose log_sigma changed is recomputed.
+  ll_year <- numeric(Y)
+  for (y in 1:Y) {
+    ll_year[y] <- marginal_log_lik_block(
+      m2_blocks$home_score[[y]], m2_blocks$away_score[[y]],
+      mu, sigma[y], sigma[y],
+      Z_m2[[y]]$home, Z_m2[[y]]$away
+    )
+  }
+  lp_current <- log_prior_m2(mu, log_sigma, omega) + sum(ll_year)
 
   cat("Running MH for Model 2...\n")
 
@@ -383,28 +462,53 @@ mh_model2 <- function(n_iter      = 2000,
 
     # --- Block 1: update mu alone ---
     mu_prop <- mu + rnorm(1, 0, proposal_sd)
-    lp_prop <- log_posterior_m2(mu_prop, log_sigma, omega)
+    # mu is shared across all years → recompute every block
+    ll_year_prop <- numeric(Y)
+    for (y in 1:Y) {
+      ll_year_prop[y] <- marginal_log_lik_block(
+        m2_blocks$home_score[[y]], m2_blocks$away_score[[y]],
+        mu_prop, sigma[y], sigma[y],
+        Z_m2[[y]]$home, Z_m2[[y]]$away
+      )
+    }
+    lp_prop <- log_prior_m2(mu_prop, log_sigma, omega) + sum(ll_year_prop)
     if (log(runif(1)) < lp_prop - lp_current) {
       mu         <- mu_prop
+      ll_year    <- ll_year_prop
       lp_current <- lp_prop
       n_accept   <- n_accept + 1
     }
 
     # --- Block 2: update omega alone ---
     omega_prop <- abs(omega + rnorm(1, 0, proposal_sd * 0.5))
-    lp_prop    <- log_posterior_m2(mu, log_sigma, omega_prop)
-    if (log(runif(1)) < lp_prop - lp_current) {
-      omega      <- omega_prop
-      lp_current <- lp_prop
+    if (omega_prop > 0) {
+      # OPTIMIZATION: likelihood does NOT depend on omega, so we reuse ll_year.
+      lp_prop <- log_prior_m2(mu, log_sigma, omega_prop) + sum(ll_year)
+      if (log(runif(1)) < lp_prop - lp_current) {
+        omega      <- omega_prop
+        lp_current <- lp_prop
+      }
     }
 
     # --- Block 3: update each log_sigma[y] one at a time ---
     for (y in seq_len(Y)) {
       log_sigma_prop    <- log_sigma
       log_sigma_prop[y] <- log_sigma[y] + rnorm(1, 0, proposal_sd)
-      lp_prop <- log_posterior_m2(mu, log_sigma_prop, omega)
+
+      sigma_prop_y <- exp(log_sigma_prop[y])
+      ll_y_prop <- marginal_log_lik_block(
+        m2_blocks$home_score[[y]], m2_blocks$away_score[[y]],
+        mu, sigma_prop_y, sigma_prop_y,
+        Z_m2[[y]]$home, Z_m2[[y]]$away
+      )
+
+      prior_diff <- prior_diff_logsigma(log_sigma_prop, log_sigma, omega, y, Y)
+      lp_prop <- lp_current + prior_diff - ll_year[y] + ll_y_prop
+
       if (log(runif(1)) < lp_prop - lp_current) {
         log_sigma  <- log_sigma_prop
+        sigma[y]   <- sigma_prop_y
+        ll_year[y] <- ll_y_prop
         lp_current <- lp_prop
       }
     }
@@ -431,7 +535,7 @@ mh_model2 <- function(n_iter      = 2000,
 }
 
 # Run Model 2 MH
-mh2 <- mh_model2(n_iter = 5000, n_warmup = 1000, proposal_sd = 0.05)
+mh2 <- mh_model2(n_iter = 2000, n_warmup = 500, proposal_sd = 0.05)
 
 # ---- Summarise Model 2 results ----------------------------------------------
 
@@ -483,8 +587,6 @@ plot(mh2$mu,           type = "l", main = "Trace: mu",           ylab = "mu")
 plot(mh2$omega,        type = "l", main = "Trace: omega",        ylab = "omega")
 plot(mh2$sigma[, 1],   type = "l", main = "Trace: sigma[1]",    ylab = "sigma[1]")
 dev.off()
-
-
 # Save Model 2 MH results
 saveRDS(mh2, "data/processed/mh_fit_model2.rds")
 
@@ -494,6 +596,6 @@ message("  - data/processed/mh_fit_model1.rds")
 message("  - data/processed/mh_fit_model2.rds")
 message("  - figures/model1_mh_sigma_alpha_trajectory.png")
 message("  - figures/model1_mh_sigma_beta_trajectory.png")
-message("  - figures/model1_mh_trace.png")        # add this
+message("  - figures/model1_mh_trace.png")
 message("  - figures/model2_mh_sigma_trajectory.png")
-message("  - figures/model2_mh_trace.png")        # add this
+message("  - figures/model2_mh_trace.png")
