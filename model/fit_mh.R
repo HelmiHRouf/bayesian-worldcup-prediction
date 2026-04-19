@@ -57,7 +57,7 @@ Y <- nrow(year_mapping)
 # averaging the Poisson likelihoods. This marginalizes out team strengths.
 # =============================================================================
 
-S <- 200  # Monte Carlo samples for marginal likelihood (increase for accuracy)
+S <- 300  # Monte Carlo samples for marginal likelihood (increase for accuracy)
 
 marginal_log_lik_match <- function(home_goals, away_goals,
                                    mu, sigma_atk, sigma_def) {
@@ -198,7 +198,7 @@ mh_model1 <- function(n_iter     = 2000,
 }
 
 # Run Model 1 MH
-mh1 <- mh_model1(n_iter = 2000, n_warmup = 500, proposal_sd = 0.05)
+mh1 <- mh_model1(n_iter = 5000, n_warmup = 1000, proposal_sd = 0.05)
 
 # ---- Summarise Model 1 results ----------------------------------------------
 
@@ -423,7 +423,7 @@ mh_model2 <- function(n_iter      = 2000,
 }
 
 # Run Model 2 MH
-mh2 <- mh_model2(n_iter = 2000, n_warmup = 500, proposal_sd = 0.03)
+mh2 <- mh_model2(n_iter = 5000, n_warmup = 1000, proposal_sd = 0.05)
 
 # ---- Summarise Model 2 results ----------------------------------------------
 
