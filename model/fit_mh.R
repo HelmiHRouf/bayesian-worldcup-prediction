@@ -291,6 +291,14 @@ print(p_m1_sb)
 ggsave("figures/model1_mh_sigma_beta_trajectory.png", p_m1_sb,
        width = 10, height = 6, dpi = 150)
 
+# mh1
+png("figures/model1_mh_trace.png", width = 1000, height = 600)
+par(mfrow = c(3, 1))
+plot(mh1$mu,             type = "l", main = "Trace: mu",             ylab = "mu")
+plot(mh1$sigma_alpha[,1], type = "l", main = "Trace: sigma_alpha[1]", ylab = "sigma_alpha[1]")
+plot(mh1$sigma_beta[,1],  type = "l", main = "Trace: sigma_beta[1]",  ylab = "sigma_beta[1]")
+dev.off()
+
 # =============================================================================
 # MODEL 2: MH for time-varying sigma via random walk
 # Parameters: mu, log_sigma[1..Y], omega
@@ -446,8 +454,8 @@ sigma_summary_m2 <- tibble(
 )
 
 p_m2 <- ggplot(sigma_summary_m2, aes(x = year, y = median)) +
-  geom_ribbon(aes(ymin = lo95, ymax = hi95), alpha = 0.15) +
-  geom_ribbon(aes(ymin = lo80, ymax = hi80), alpha = 0.30) +
+  geom_ribbon(aes(ymin = lo95, ymax = hi95), alpha = 0.15, fill = "steelblue") +
+  geom_ribbon(aes(ymin = lo80, ymax = hi80), alpha = 0.30, fill = "steelblue") +
   geom_line(linewidth = 1, color = "steelblue") +
   geom_point(size = 2) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
@@ -468,6 +476,15 @@ print(p_m2)
 ggsave("figures/model2_mh_sigma_trajectory.png", p_m2,
        width = 10, height = 6, dpi = 150)
 
+# After mh2 finishes, add:
+png("figures/model2_mh_trace.png", width = 1000, height = 600)
+par(mfrow = c(3, 1))
+plot(mh2$mu,           type = "l", main = "Trace: mu",           ylab = "mu")
+plot(mh2$omega,        type = "l", main = "Trace: omega",        ylab = "omega")
+plot(mh2$sigma[, 1],   type = "l", main = "Trace: sigma[1]",    ylab = "sigma[1]")
+dev.off()
+
+
 # Save Model 2 MH results
 saveRDS(mh2, "data/processed/mh_fit_model2.rds")
 
@@ -475,6 +492,8 @@ message("\nMH fitting complete!")
 message("Results saved to:")
 message("  - data/processed/mh_fit_model1.rds")
 message("  - data/processed/mh_fit_model2.rds")
-message("  - figures/model2_mh_sigma_trajectory.png")
 message("  - figures/model1_mh_sigma_alpha_trajectory.png")
 message("  - figures/model1_mh_sigma_beta_trajectory.png")
+message("  - figures/model1_mh_trace.png")        # add this
+message("  - figures/model2_mh_sigma_trajectory.png")
+message("  - figures/model2_mh_trace.png")        # add this
