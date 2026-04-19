@@ -1,5 +1,5 @@
 # =============================================================================
-# fit_model2.R — Fit Model 2: Continuous-Time Varying Competitive Balance
+# fit_model2VI.R — Fit Model 2: Continuous-Time Varying Competitive Balance
 # =============================================================================
 
 library(cmdstanr)
@@ -51,21 +51,27 @@ model <- cmdstan_model("model/model2.stan")
 fit_vi <- model$variational(
   data = stan_data,
   seed = 2026,
-  iter = 20000,            # number of VI iterations
-  grad_samples = 1,
-  elbo_samples = 100,
-  output_samples = 2000    # draws from variational posterior
+  iter = 20000,
+  algorithm = "meanfield",  # ← fullrank is too slow for our model
+  eta = 0.1,               # ← smaller step size for stability
+  tol_rel_obj = 0.001,     # ← looser convergence tolerance
+  draws = 2000
 )
+
+# Check if VI succeeded before continuing
+if (fit_vi$return_codes() != 0) {
+  warning("VI fitting may have issues. Check fit_vi$output() for details.")
+}
 
 # ---- 7. Diagnostics ----------------------------------------------------------
 
-fit_vi$cmdstan_diagnose()
+fit_vi$output()
 
-print(fit_vi$summary(variables = c("mu", "omega", "sigma[1]", "sigma[20]", "sigma[27]")))
+print(fit_vi$summary(variables = c("mu", "omega", "rho", "sigma[1]", "sigma[20]", "sigma[27]")))
 
 # ---- 8. Save fit_vi ------------------------------------------------------------
 
-fit_vi$save_object("data/processed/mcmc_fit_vi_model2.rds")
+fit_vi$save_object("data/processed/vi_fit_model2.rds")
 
 # ---- 9. Extract draws --------------------------------------------------------
 
@@ -115,7 +121,7 @@ p_sigma <- ggplot(sigma_summary, aes(x = year, y = median)) +
 print(p_sigma)
 
 # Save plot
-ggsave("figures/model2_sigma_trajectory.png", p_sigma, width = 10, height = 6, dpi = 150)
+ggsave("figures/model2VI_sigma_trajectory.png", p_sigma, width = 10, height = 6, dpi = 150)
 
 # ---- 11. Plot log_sigma trajectory (random walk) ---------------------------
 
@@ -151,12 +157,12 @@ p_log_sigma <- ggplot(log_sigma_summary, aes(x = year, y = median)) +
 
 print(p_log_sigma)
 
-ggsave("figures/model2_log_sigma_trajectory.png", p_log_sigma, width = 10, height = 6, dpi = 150)
+ggsave("figures/model2VI_log_sigma_trajectory.png", p_log_sigma, width = 10, height = 6, dpi = 150)
 
 # ---- 12. Compare with Model 1 (if available) -------------------------------
 
 # Optional: Load Model 1 results and compare sigma estimates
-if (file.exists("data/processed/mcmc_fit_era_dispersions.rds")) {
+if (file.exists("data/processed/vi_fit_era_dispersions.rds")) {
 
   message("\n=== Comparison with Model 1 ===")
 
@@ -176,25 +182,11 @@ if (file.exists("data/processed/mcmc_fit_era_dispersions.rds")) {
   message("Model 2: Year-based sigma (continuous with random walk)")
 }
 
-# ---- 13. LOO for model comparison ------------------------------------------
 
-# Extract as draws array (preserves chain information)
-log_lik <- fit_vi$draws("log_lik", format = "draws_array")
-
-# Compute relative effective sample size (needed for PSIS LOO)
-r_eff <- relative_eff(exp(log_lik))
-
-# Compute LOO-CV
-loo_fit_vi <- loo(log_lik, r_eff = r_eff)
-
-print(loo_fit_vi)
-
-# Save LOO results
-saveRDS(loo_fit_vi, "data/processed/loo_model2.rds")
 
 message("\nModel 2 fitting complete!")
 message("Results saved to:")
-message("  - data/processed/mcmc_fit_model2.rds")
+message("  - data/processed/vi_fit_model2.rds")
 message("  - data/processed/loo_model2.rds")
-message("  - figures/model2_sigma_trajectory.png")
-message("  - figures/model2_log_sigma_trajectory.png")
+message("  - figures/model2VI_sigma_trajectory.png")
+message("  - figures/model2VI_log_sigma_trajectory.png")

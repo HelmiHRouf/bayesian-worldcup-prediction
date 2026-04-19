@@ -1,5 +1,5 @@
 // Model 2: Continuous-Time Varying Competitive Balance
-// 
+//
 // Time-varying dispersion of team strengths using a random walk on log-scale.
 // This captures how competitive balance evolves continuously across years.
 //
@@ -27,40 +27,59 @@ parameters {
   real mu;                                // baseline log scoring rate
 
   // Time-varying dispersion (random walk on log scale)
-  vector<lower=1e-3>[Y] sigma;           // sigma[y] = exp(log_sigma[y])
-  real<lower=1e-3> omega;                // volatility of sigma evolution
+  // Reparameterized: log_sigma is the parameter, sigma is derived
+  vector[Y] log_sigma_raw;               // non-centered random walk increments
+  real<lower=-3, upper=3> log_sigma_1;   // initial log_sigma[1] (~ 0.05 to 20)
+  real<lower=1e-3> omega;      // volatility of sigma evolution (constrained)
 
   // Team-year specific strengths (random effects, non-centered)
   matrix[T, Y] attack_raw;
   matrix[T, Y] defense_raw;
+
+  real<lower=0, upper=1> rho; // AR(1)
 }
 
 transformed parameters {
-  // Non-centered parameterization for computational efficiency
+  vector[Y] log_sigma;
+  vector<lower=0>[Y] sigma;
   matrix[T, Y] attack;
   matrix[T, Y] defense;
 
-  for (y in 1:Y) {
+  // Reconstruct random walk on log_sigma
+  log_sigma[1] = log_sigma_1;
+  for (y in 2:Y) {
+    log_sigma[y] = log_sigma[y-1] + omega * log_sigma_raw[y];
+  }
+
+  // Exponentiate to get sigma
+  sigma = exp(log_sigma);
+
+  // Year 1: non-centered
+  for (t in 1:T) {
+    attack[t, 1] = sigma[1] * attack_raw[t, 1];
+    defense[t, 1] = sigma[1] * defense_raw[t, 1];
+  }
+  // Subsequent years: AR(1) evolution
+  for (y in 2:Y) {
     for (t in 1:T) {
-      attack[t, y] = sigma[y] * attack_raw[t, y];
-      defense[t, y] = sigma[y] * defense_raw[t, y];
+      attack[t, y] = rho * attack[t, y-1] + sigma[y] * attack_raw[t, y];
+      defense[t, y] = rho * defense[t, y-1] + sigma[y] * defense_raw[t, y];
     }
   }
 }
 
 model {
   // --- Priors ---
+  rho ~ beta(8, 2);
+
   mu ~ normal(0, 1);
-  omega ~ normal(0, 0.5);                // half-normal via constraint
+  // soft prior for log_sigma_1 (centered on ~1.0, sigma ~2.7)
+  log_sigma_1 ~ normal(0.5, 1);
+  // tighter prior on omega to prevent explosive random walk
+  omega ~ exponential(2);                // mean ~0.5, sd ~0.5
 
-  // Random walk on log-sigma (implemented via differences)
-  // log_sigma[1] ~ Normal(0, 1) [implicit via sigma[1] prior]
-  sigma[1] ~ normal(0, 1);               // initial sigma
-
-  // Differences: log_sigma[y] - log_sigma[y-1] ~ Normal(0, omega)
-  for (y in 2:Y) {
-    log(sigma[y]) ~ normal(log(sigma[y-1]), omega);
-  }
+  // Random walk increments: standard normal (scaled by omega in transformed params)
+  log_sigma_raw ~ normal(0, 1);
 
   // Team-year strengths (standard normal, scaled by sigma in transformed params)
   for (y in 1:Y) {
@@ -107,9 +126,5 @@ generated quantities {
                  + poisson_log_lpmf(away_score[i] | log_lambda_away);
   }
 
-  // Extract log_sigma for easier plotting
-  vector[Y] log_sigma;
-  for (y in 1:Y) {
-    log_sigma[y] = log(sigma[y]);
-  }
+  // log_sigma is already computed in transformed parameters
 }
