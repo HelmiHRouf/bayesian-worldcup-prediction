@@ -42,171 +42,84 @@ We will: 1. Model how team strength distributions have evolved across historical
 
 ## Methodology
 
-### Model 1: Shrinking Strength Spread (Poisson Goals)
+## Model 1: Era-Based Competitive Balance (Poisson Goals)
 
-#### Observed Data
+### Setup
 
-Let $i = 1,\dots,N$ index matches, $t = 1,\dots,T$ index teams, and $e = 1,\dots,E$ index eras.
+Let $i=1,\dots,N$ index matches, $t=1,\dots,T$ teams, and $e=1,\dots,E$ eras.  
+Let $h(i), a(i)$ denote the home and away teams, and $e(t)$ the era of team $t$.
 
-$y_i^{(H)}$: number of goals scored by the home team in match $i$
-
-$y_i^{(A)}$: number of goals scored by the away team in match $i$
-
-$h(i), a(i) \in \{1,\dots,T\}$: home and away teams in match $i$
-
-$e(i) \in \{1,\dots,E\}$: era of match $i$
-
-------------------------------------------------------------------------
-
-#### Parameters
-
-$\mu$: baseline log scoring rate (global)
-
-$\alpha_{t,e}$: attacking strength of team $t$ in era $e$
-
-$\beta_{t,e}$: defensive strength of team $t$ in era $e$
-
-$\sigma_{\alpha,e}$: dispersion of attacking strengths across all teams in era $e$
-
-$\sigma_{\beta,e}$: dispersion of defensive strengths across all teams in era $e$
-
-## Model
+---
 
 ### Likelihood
 
 $$
-y_i^{(H)} \sim \text{Poisson}(\lambda_i^{(H)})
+y_i^{(H)} \sim \mathrm{Poisson}(\lambda_i^{(H)}), \quad
+y_i^{(A)} \sim \mathrm{Poisson}(\lambda_i^{(A)})
 $$
 
 $$
-y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
+\log \lambda_i^{(H)} = \mu + \alpha_{h(i)} - \beta_{a(i)}, \quad
+\log \lambda_i^{(A)} = \mu + \alpha_{a(i)} - \beta_{h(i)}
 $$
 
-$$
-\log \lambda_i^{(H)} = \mu + a_{h(i)} - d_{a(i)}
-$$
+---
+
+### Hierarchical Structure
 
 $$
-\log \lambda_i^{(A)} = \mu + a_{a(i)} - d_{h(i)}
+\alpha_t \sim \mathcal{N}(0, \sigma_{\alpha,e(t)}^2), \quad
+\beta_t \sim \mathcal{N}(0, \sigma_{\beta,e(t)}^2)
 $$
 
-where team attacking strengths $a_t$ and defensive strengths $d_t$ are drawn from era-specific distributions:
-
-$$
-a_t \sim \mathcal{N}(0, \sigma_{\alpha,e(t)}^2)
-$$
-
-$$
-d_t \sim \mathcal{N}(0, \sigma_{\beta,e(t)}^2)
-$$
-
-------------------------------------------------------------------------
-
+---
 
 ### Priors
-
-**Team-era hierarchy** (each team has era-specific strength):
-
-$$
-\alpha_{t,e} \sim \mathcal{N}(0, \sigma_{\alpha,e}^2), \quad t = 1,\dots,T, \quad e = 1,\dots,E
-$$
-
-$$
-\beta_{t,e} \sim \mathcal{N}(0, \sigma_{\beta,e}^2), \quad t = 1,\dots,T, \quad e = 1,\dots,E
-$$
-
-**Era-level dispersion parameters:**
 
 $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
+$$
+\sigma_{\alpha,e}, \sigma_{\beta,e} \sim \mathcal{N}(0,1)\ \text{truncated to } [10^{-3}, \infty)
+$$
 
-**Global parameters:**
+---
 
-### Implementation Note
-
-In the Stan implementation, team-level attacking strengths $a_t$ and defensive strengths $d_t$ are treated as **random effects** (latent variables). Rather than sampling individual team parameters (which would require $2 \times T \times 7$ parameters), we use a **non-centered parameterization with random effects** that marginalizes out the team-level uncertainties during sampling. This yields computationally tractable inference while still estimating the key era-specific dispersion parameters $\sigma_{\alpha,e}$ and $\sigma_{\beta,e}$.
-
-------------------------------------------------------------------------
-
-
-## Posterior
-
-We infer the joint posterior over era-level dispersion parameters:
+### Posterior
 
 $$
-p\left(
-\mu,
-\{\alpha_{t,e}, \beta_{t,e}\}_{t=1,e=1}^{T,E},
-\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{E}
-\mid
-\{y_i^{(H)}, y_i^{(A)}\}_{i=1}^{N}
+p\!\left(
+\mu,\{\alpha_t,\beta_t\},\{\sigma_{\alpha,e},\sigma_{\beta,e}\}
+\mid \{y_i^{(H)},y_i^{(A)}\}
 \right)
 $$
 
-Note: Team-level strengths $\{a_t, d_t\}_{t=1}^{T}$ are treated as random effects and marginalized out during sampling.
+---
 
-------------------------------------------------------------------------
-
-## Quantity of Interest
-
-The key object of interest is the evolution of
+### Quantity of Interest
 
 $$
-$\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^{7}
+\{\sigma_{\alpha,e}, \sigma_{\beta,e}\}_{e=1}^E
 $$
 
-which measures how the **dispersion of team strengths changes across eras**, and therefore captures changes in **competitive balance (parity)** over time.
+Smaller values indicate greater parity (more competitive balance).
 
-## Model 2: Continuous-Time Varying Competitive Balance
+---
 
-### Model Setup and Notation
+## Model 2: Time-Varying Competitive Balance
 
-Let $i = 1,\dots,N$ index matches, $t = 1,\dots,T$ index teams, and $y = 1,\dots,Y$ index years.
+### Setup
 
-$h(i), a(i)$: home and away teams in match $i$
+Let $y=1,\dots,Y$ index years and $y(i)$ the year of match $i$.
 
-$y(i)$: year in which match $i$ is played
-
-------------------------------------------------------------------------
-
-### Observed Data
-
-$y_i^{(H)}$: goals scored by the home team in match $i$
-
-$y_i^{(A)}$: goals scored by the away team in match $i$
-
-------------------------------------------------------------------------
-
-### Parameters
-
-*Global parameters*
-
-$\mu$: baseline log scoring rate
-
-*Team-year latent strengths*
-
-$\alpha_{t,y}$: attacking strength of team $t$ in year $y$
-
-$\beta_{t,y}$: defensive strength of team $t$ in year $y$
-
-*Time-varying competitiveness*
-
-$\sigma_y$: dispersion of team strengths in year $y$
-
-$\omega$: volatility of the evolution of $\sigma_y$
-
-------------------------------------------------------------------------
+---
 
 ### Likelihood
 
 $$
-y_i^{(H)} \sim \text{Poisson}(\lambda_i^{(H)})
-$$
-
-$$
-y_i^{(A)} \sim \text{Poisson}(\lambda_i^{(A)})
+y_i^{(H)} \sim \mathrm{Poisson}(\lambda_i^{(H)}), \quad
+y_i^{(A)} \sim \mathrm{Poisson}(\lambda_i^{(A)})
 $$
 
 $$
@@ -217,76 +130,65 @@ $$
 \log \lambda_i^{(A)} = \mu + \alpha_{a(i),y(i)} - \beta_{h(i),y(i)}
 $$
 
-------------------------------------------------------------------------
+---
 
-### Team-Level Structure
-
-$$
-\alpha_{t,y} \sim \mathcal{N}(0, \sigma_y^2)
-$$
+### Team-Year Effects
 
 $$
-\beta_{t,y} \sim \mathcal{N}(0, \sigma_y^2)
+\alpha_{t,y}, \beta_{t,y} \sim \mathcal{N}(0, \sigma_y^2)
 $$
 
-------------------------------------------------------------------------
+---
 
-### Evolution of Competitive Balance
-
-We model the evolution of log-dispersion as a random walk:
+### Dynamic Competitive Balance
 
 $$
-\log \sigma_y = \log \sigma_{y-1} + \varepsilon_y
-$$
-
-$$
+\log \sigma_y = \log \sigma_{y-1} + \varepsilon_y, \quad
 \varepsilon_y \sim \mathcal{N}(0, \omega^2)
 $$
 
-------------------------------------------------------------------------
+---
 
 ### Priors
-
-$$
-\sigma_1 \sim \text{HalfNormal}(0,1)
-$$
-
-$$
-\omega \sim \text{HalfNormal}(0,0.5)
-$$
 
 $$
 \mu \sim \mathcal{N}(0,1)
 $$
 
-------------------------------------------------------------------------
+$$
+\sigma_1 \sim \text{Half-Normal}(0,1), \quad
+\omega \sim \text{Half-Normal}(0,0.5)
+$$
+
+---
 
 ### Posterior
 
-We infer the joint posterior:
-
 $$
-p\left(
-\mu,
-\{\alpha_{t,y}, \beta_{t,y}\},
-\{\sigma_y\},
-\omega
-\mid
-\{y_i^{(H)}, y_i^{(A)}\}
+p\!\left(
+\mu,\{\alpha_{t,y},\beta_{t,y}\},\{\sigma_y\},\omega
+\mid \{y_i^{(H)},y_i^{(A)}\}
 \right)
 $$
 
-------------------------------------------------------------------------
+---
 
 ### Quantity of Interest
 
-The primary object of interest is the trajectory
-
 $$
-\{\sigma_y\}_{y=1}^{Y}
+\{\sigma_y\}_{y=1}^Y
 $$
 
-which represents the *evolution of competitive balance over time*.
+A decreasing trend in $\sigma_y$ indicates increasing parity over time.
+
+---
+
+### Implementation Note
+
+- **MH:** samples $p(\mu,\sigma,\omega \mid y)$ (marginalized model)  
+- **Stan (HMC):** samples full hierarchical model (non-centered)
+
+Both correspond to the same underlying statistical model.
 
 ### Posterior Computation
 
