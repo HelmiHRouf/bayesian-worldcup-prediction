@@ -292,8 +292,9 @@ which represents the *evolution of competitive balance over time*.
 
 | Method   | Technique                                   | Tool |
 |----------|---------------------------------------------|------|
-| Method 1 | Markov Chain Monte Carlo (MCMC)             | Stan |
-| Method 2 | Variational Inference (Stochastic Gradient) | ---  |
+| Method 1 | Metropolis Hastings                         | --- |
+| Method 2 | Markov Chain Monte Carlo (MCMC)             | Stan |
+| Method 3 | Variational Inference (Stochastic Gradient) | Stan  |
 
 ### Model Comparison
 
@@ -322,10 +323,8 @@ bayesian-worldcup-prediction/
 ├── data/
 │   ├── raw/                # Original unprocessed datasets
 │   └── processed/          # Cleaned and transformed data
-├── R/                      # R helper functions and utilities
-├── stan/                   # Stan model files (.stan)
-├── scripts/                # R scripts for data processing, fitting, simulation
-├── rmd/                    # R Markdown notebooks for exploration and reporting
+├── scripts/                # R scripts for data fitting, simulation, also the stan models
+├── rmd/                    # R Markdown notebooks data cleaning
 ├── figures/                # Generated figures for the report
 ├── report/                 # Final report source files
 ├── .gitignore
