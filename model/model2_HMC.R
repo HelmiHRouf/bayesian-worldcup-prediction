@@ -102,7 +102,7 @@ p_sigma <- ggplot(sigma_summary, aes(x = year, y = median)) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
   labs(
     title = "Evolution of Competitive Balance Over Time",
-    subtitle = "Model 2: Time-Varying Team Strength Dispersion (sigma)",
+    subtitle = "Model 2: Time-Varying Team Strength Dispersion via HMC",
     caption = "Lower sigma → teams more similar → more unpredictable",
     x = "Year",
     y = expression(sigma[y])
@@ -158,9 +158,9 @@ ggsave("figures/model2_log_sigma_trajectory.png", p_log_sigma, width = 10, heigh
 
 # Optional: Load Model 1 results and compare sigma estimates
 if (file.exists("data/processed/mcmc_fit_era_dispersions.rds")) {
-  
+
   message("\n=== Comparison with Model 1 ===")
-  
+
   # Model 1 sigma by era (manually map to years for comparison)
   era_year_mapping <- tribble(
     ~era, ~year,
@@ -172,7 +172,7 @@ if (file.exists("data/processed/mcmc_fit_era_dispersions.rds")) {
     6, 2020,   # 2018-2022 midpoint
     7, 2024    # 2022-2026 midpoint
   )
-  
+
   message("Model 1: Era-based sigma (discrete)")
   message("Model 2: Year-based sigma (continuous with random walk)")
 }
